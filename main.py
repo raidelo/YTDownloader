@@ -24,6 +24,9 @@ class YTDownloader:
     __default_headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
                          "Referer": "https://www.y2mate.com/",
                          }
+    __url_error = "error: url inválida"
+    __missing_target_url = "error: no hay url objetivo"
+    __missing_data_error = "error: no hay datos de vídeo disponibles"
 
     def __init__(self):
         self.__target = ''
@@ -49,7 +52,7 @@ class YTDownloader:
 
     def set_target(self, url:str):
         if not self.__verify_url(url):
-            raise ValueError("error: url inválida")
+            raise ValueError(self.__url_error)
         self.__target = url
     
     def reset_target(self):
@@ -58,7 +61,7 @@ class YTDownloader:
 
     def get_info(self):
         if not self.__check_target():
-            raise Exception("error: no hay url objetivo")        
+            raise Exception()
         info = self.__analyze(self.__target)
         return self.__save_info(info)
 
@@ -78,26 +81,24 @@ class YTDownloader:
         response = get(link,
                        headers=self.__default_headers,
                        stream=True)
-        CHUNK_SIZE = 1024
-        iterator = response.iter_content(CHUNK_SIZE)
-        target_size = int(response.headers["Content-Length"].strip())
-        downloaded = 0
-        video_title = self.get_video_name()
-        LENGTH_BAR = 50
-
+    
         def update_bar(done, target, length_bar):
             p = done / target
             buffer = '['
             asterisc = round(length_bar*p)
-            buffer += '*'*asterisc
-            minus = length_bar - asterisc
-            buffer += '-'*minus
+            buffer += '*'*asterisc + '-'*(length_bar - asterisc)
             buffer += '] {} % ({} MB / {} MB)'.format(round(p*100),
                                                       round(done / 1000000, 3),
                                                       round(target / 1000000, 3),
                                                       )
             return buffer
 
+        video_title = self.get_video_name()
+        LENGTH_BAR = 50
+        CHUNK_SIZE = 1024
+        iterator = response.iter_content(CHUNK_SIZE)
+        downloaded = 0
+        target_size = int(response.headers["Content-Length"].strip())
         with open(video_title+".mp4", "wb") as file:
             print("Downloading video: {}.mp4".format(video_title))
             for chunk in iterator:
@@ -110,7 +111,7 @@ class YTDownloader:
         try:
             return self.__data["title"]
         except KeyError:
-            raise KeyError("error: there is no video data available")
+            raise KeyError(self.__missing_data_error)
     
     def __save_info(self, info:dict):
         strip_stuff = lambda x: x.strip((ascii_letters + punctuation + ' ').replace('p', ''))
@@ -126,7 +127,7 @@ class YTDownloader:
                                                                                      )
             return True
         else:
-            print("error: there is no video data available")
+            print(self.__missing_data_error)
             return False
 
     def __analyze(self, url:str) -> dict:
@@ -152,7 +153,7 @@ class YTDownloader:
 
     def get_formatted_data(self, print_:bool=True):
         if not self.__check_data():
-            raise ValueError("No hay datos!")
+            raise ValueError(self.__missing_data_error)
         d = pformat(self.__data)
         if print_:
             print(d)
@@ -160,7 +161,7 @@ class YTDownloader:
 
     def print_available_qualities(self):
         if not self.__check_data():
-            raise KeyError("error: there is no video data available")
+            raise KeyError(self.__missing_data_error)
         t = self.__data["qualities"].items()
         print("{} de video disponible para descargar:".format("Calidades" if len(t) > 1 else "Calidad"))
         for qual, video in t:
