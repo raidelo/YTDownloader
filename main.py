@@ -1,7 +1,6 @@
 from pprint import pformat
-from requests import post
 from string import ascii_letters, punctuation
-#from for_debugging import *
+from requests import get, post
 
 class Video:
     def __init__(self, id, key, size="??? MB"):
@@ -67,12 +66,49 @@ class YTDownloader:
             vid = self.__data["qualities"][calidad]
             self.__download(vid)
         except KeyError:
-            raise KeyError("error: calidad no disponible -> {}".format(calidad))
+            print("error: calidad no disponible -> {}".format(calidad))
+            exit(1)
         self.reset_target()
 
     def __download(self, video):
-        pass
+        link = self.__get_download_link(video)
+        response = get(link,
+                       headers=self.__default_headers,
+                       stream=True)
+        CHUNK_SIZE = 1024
+        iterator = response.iter_content(CHUNK_SIZE)
+        target_size = int(response.headers["Content-Length"].strip())
+        downloaded = 0
+        video_title = self.get_video_name()
+        LENGTH_BAR = 50
 
+        def update_bar(done, target, length_bar):
+            p = done / target
+            buffer = '['
+            asterisc = round(length_bar*p)
+            buffer += '*'*asterisc
+            minus = length_bar - asterisc
+            buffer += '-'*minus
+            buffer += '] {} % ({} MB / {} MB)'.format(round(p*100),
+                                                      round(done / 1000000, 3),
+                                                      round(target / 1000000, 3),
+                                                      )
+            return buffer
+
+        with open(video_title+".mp4", "wb") as file:
+            print("Downloading video: {}.mp4".format(video_title))
+            for chunk in iterator:
+                file.write(chunk)
+                downloaded += len(chunk)
+                print('\r' + update_bar(downloaded, target_size, LENGTH_BAR), end='')
+        print("Finished! -> {}.mp4".format(video_title))
+
+    def get_video_name(self):
+        try:
+            return self.__data["title"]
+        except KeyError:
+            raise KeyError("error: there is no video data available")
+    
     def __save_info(self, info:dict):
         strip_stuff = lambda x: x.strip((ascii_letters + punctuation + ' ').replace('p', ''))
         if "mp4" in info["links"]:
