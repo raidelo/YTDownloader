@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 from pprint import pformat
 from string import ascii_letters, punctuation
 from requests import get, post
@@ -63,6 +64,8 @@ class YTDownloader:
 
     def download(self, calidad:str):
         try:
+            if not calidad.endswith('p'):
+                calidad += 'p'
             vid = self.__data["qualities"][calidad]
             self.__download(vid)
         except KeyError:
@@ -154,3 +157,38 @@ class YTDownloader:
         if print_:
             print(d)
         return d
+
+    def print_available_qualities(self):
+        if not self.__check_data():
+            raise KeyError("error: there is no video data available")
+        t = self.__data["qualities"].items()
+        print("{} de video disponible para descargar:".format("Calidades" if len(t) > 1 else "Calidad"))
+        for qual, video in t:
+            print("{} -> {}".format(qual, video.size))
+
+if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument("link",
+                        help="el link del vídeo que quieres descargar")
+    parser.add_argument("calidad", nargs="?",
+                        help="la calidad en la que prefieres descargar el vídeo")
+    args = parser.parse_args()
+
+    downloader = YTDownloader()
+
+    downloader.set_target(args.link)
+
+    downloader.get_info()
+
+    print("Link de vídeo detectado! -> {}".format(downloader.get_video_name()))
+
+    if not args.calidad:
+        downloader.print_available_qualities()
+        exit(0)
+
+    try:
+        downloader.download(args.calidad)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        exit(0)
