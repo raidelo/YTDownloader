@@ -33,7 +33,7 @@ class YTDownloader:
     __default_headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
                          "Referer": "https://www.y2mate.com/",
                          }
-    __url_error = "error: url inválida"
+    __url_error = "error: url inválida -> {}"
     __missing_target_url = "error: no hay url objetivo"
     __missing_data_error = "error: los datos del vídeo no existen"
     __connection_error = "error: compruebe su conexión a internet o cortafuegos"
@@ -67,7 +67,7 @@ class YTDownloader:
 
     def set_target(self, url:str) -> None:
         if self.__verify_url(url) != 0:
-            raise ValueError(self.__url_error)
+            raise ValueError(self.__url_error.format(url))
         self.__target = url
     
     def reset_target(self) -> None:
