@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 from pprint import pformat
-from string import ascii_letters, punctuation
+from string import printable, digits
 from typing import Any
 from requests import get, post, RequestException
 
@@ -37,6 +37,7 @@ class YTDownloader:
     __missing_target_url = "error: no hay url objetivo"
     __missing_data_error = "error: los datos del vídeo no existen"
     __connection_error = "error: compruebe su conexión a internet o cortafuegos"
+    __quality_value_error = "error: valor de calidad incorecto -> {}"
 
     def __init__(self):
         self.__target = ''
@@ -81,19 +82,25 @@ class YTDownloader:
             raise RequestException(self.__connection_error)
         return self.__save_info(info)
 
-    def download(self, calidad) -> int:
+    def __check_quality(self, quality):
+        if self.__check_data() != 0:
+            raise MissingVideoData(self.__missing_data_error)
+        if isinstance(quality, str):
+            quality = quality.strip()
+            if not (quality[-1] == 'p' or quality[-1].isnumeric()):
+                ValueError(self.__quality_value_error.format(quality))
+            try:
+                quality = int(quality.strip(printable.replace(digits, '')))
+            except ValueError:
+                ValueError(self.__quality_value_error.format(quality))
         try:
-            if isinstance(calidad, int):
-                if not calidad in self.__data['qualities'].keys():
-                    raise KeyError("error: calidad no disponible -> {}".format(calidad))
-            elif isinstance(calidad, str):
-                try:
-                    calidad = int(calidad.strip('p'))
-                except ValueError:
-                    raise ValueError("error: valor de calidad incorecto")
-            video = self.__data["qualities"][calidad]
+            video = self.__data["qualities"][quality]
         except KeyError:
-            raise KeyError("error: calidad no disponible -> {}".format(calidad))
+            raise KeyError("error: calidad no disponible -> {}".format(quality))
+        return video
+
+    def download(self, calidad) -> int:
+        video = self.__check_quality(calidad)
         self.__download(video)
         self.reset_target()
         return 0
@@ -139,7 +146,7 @@ class YTDownloader:
             raise MissingVideoData(self.__missing_data_error)
     
     def __save_info(self, info:dict) -> int:
-        strip_stuff = lambda x: x.strip((ascii_letters + punctuation + ' '))
+        strip_stuff = lambda x: x.strip(printable.replace(digits, ''))
         if "links" in info.keys() and "mp4" in info["links"]:
             self.__data["title"] = info["title"]
             self.__data["vid"] = info["vid"]
@@ -268,7 +275,7 @@ if __name__ == "__main__":
         code = 0
     except KeyboardInterrupt:
         pass
-    except (KeyError, ValueError, RequestException) as e:
+    except (KeyError, ValueError, RequestException, MissingVideoData) as e:
         print(e.args[0])
     finally:
         exit(code)
