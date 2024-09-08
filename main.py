@@ -1,7 +1,14 @@
 from argparse import ArgumentParser
 from pprint import pformat
 from string import ascii_letters, punctuation
-from requests import get, post
+from typing import Any
+from requests import get, post, RequestException
+
+class MissingTargetUrl(Exception):
+    pass
+
+class MissingVideoData(Exception):
+    pass
 
 class Video:
     def __init__(self, id, key, size="??? MB", quality='none'):
@@ -28,66 +35,77 @@ class YTDownloader:
                          }
     __url_error = "error: url inválida"
     __missing_target_url = "error: no hay url objetivo"
-    __missing_data_error = "error: no hay datos de vídeo disponibles"
+    __missing_data_error = "error: los datos del vídeo no existen"
+    __connection_error = "error: compruebe su conexión a internet o cortafuegos"
 
     def __init__(self):
         self.__target = ''
         self.__data = {}
   
-    def __check_data(self) -> bool:
+    def __check_data(self) -> int:
         if self.__data == {}:
-            return False
-        return True
+            return 1
+        return 0
     
-    def __check_target(self) -> bool:
+    def __check_target(self) -> int:
         if self.__target == '':
-            return False
-        return True
+            return 1
+        return 0
 
-    def __reset_data(self):
+    def __reset_data(self) -> None:
         self.__data = {}
 
-    def __verify_url(self, url):
-        if url.startswith("https://"):
-            return True
-        return False
+    def __verify_url(self, url:str) -> int:
+        p = "https://www.youtube.com", "https://youtube.com", "https://youtu.be"
+        if not url.startswith("https://"):
+            url = "https://" + url
+        if any([url.startswith(i) for i in p]):
+            return 0
+        return 1
 
-    def set_target(self, url:str):
-        if not self.__verify_url(url):
+    def set_target(self, url:str) -> None:
+        if self.__verify_url(url) != 0:
             raise ValueError(self.__url_error)
         self.__target = url
     
-    def reset_target(self):
+    def reset_target(self) -> None:
         self.__target = ''
         self.__reset_data()
 
     def get_info(self):
-        if not self.__check_target():
-            raise Exception()
-        info = self.__analyze(self.__target)
+        if self.__check_target() != 0:
+            raise MissingTargetUrl(self.__missing_target_url)
+        try:
+            info = self.__analyze(self.__target)
+        except RequestException:
+            raise RequestException(self.__connection_error)
         return self.__save_info(info)
 
-    def download(self, calidad):
+    def download(self, calidad) -> int:
         try:
             if isinstance(calidad, int):
                 if not calidad in self.__data['qualities'].keys():
-                    print("error: calidad no disponible -> {}".format(calidad))
-                    exit(1)
+                    raise KeyError("error: calidad no disponible -> {}".format(calidad))
             elif isinstance(calidad, str):
-                calidad = int(calidad.strip('p'))
-            vid = self.__data["qualities"][calidad]
+                try:
+                    calidad = int(calidad.strip('p'))
+                except ValueError:
+                    raise ValueError("error: valor de calidad incorecto")
+            video = self.__data["qualities"][calidad]
         except KeyError:
-            print("error: calidad no disponible -> {}".format(calidad))
-            exit(1)
-        self.__download(vid)
+            raise KeyError("error: calidad no disponible -> {}".format(calidad))
+        self.__download(video)
         self.reset_target()
+        return 0
 
-    def __download(self, video):
+    def __download(self, video:Video) -> int:
         link = self.__get_download_link(video)
-        response = get(link,
-                       headers=self.__default_headers,
-                       stream=True)
-    
+        try:
+            response = get(link,
+                           headers=self.__default_headers,
+                           stream=True)
+        except RequestException:
+            raise RequestException("error: error al descargar el video. compruebe su conexión a internet o su cortafuegos")
         def update_bar(done, target, length_bar):
             p = done / target
             buffer = '['
@@ -112,33 +130,31 @@ class YTDownloader:
                 downloaded += len(chunk)
                 print('\r' + update_bar(downloaded, target_size, LENGTH_BAR), end='')
         print("Finished! -> {}.mp4".format(video_title))
+        return 0
 
-    def get_video_name(self):
+    def get_video_name(self) -> str:
         try:
             return self.__data["title"]
         except KeyError:
-            raise KeyError(self.__missing_data_error)
+            raise MissingVideoData(self.__missing_data_error)
     
-    def __save_info(self, info:dict):
+    def __save_info(self, info:dict) -> int:
         strip_stuff = lambda x: x.strip((ascii_letters + punctuation + ' '))
-        if "links" not in info.keys():
-            print("error: no hay contenido para descargar")
-            return False
-        elif "mp4" in info["links"]:
+        if "links" in info.keys() and "mp4" in info["links"]:
             self.__data["title"] = info["title"]
             self.__data["vid"] = info["vid"]
             self.__data["qualities"] = {}
             for quality_data in info["links"]["mp4"].values():
                 if quality_data["q"] != "auto" and quality_data["f"] == "mp4":
-                    self.__data["qualities"][int(strip_stuff(quality_data["q"]))] = Video(info["vid"],
-                                                                                          quality_data["k"],
-                                                                                          quality_data["size"] if quality_data["size"][0].isnumeric() else "??? MB",
-                                                                                          quality_data["q"],
-                                                                                          )
-            return True
+                    index = int(strip_stuff(quality_data["q"]))
+                    self.__data["qualities"][index] = Video(info["vid"],
+                                                            quality_data["k"],
+                                                            quality_data["size"] if quality_data["size"][0].isnumeric() else "??? MB",
+                                                            quality_data["q"],
+                                                            )
+            return 0
         else:
-            print("error: no hay contenido para descargar")
-            return False
+            raise MissingVideoData(self.__missing_data_error)
 
     def __analyze(self, url:str) -> dict:
         r = post(self.__host + self.__analyze_endpoint,
@@ -157,23 +173,27 @@ class YTDownloader:
 
     def __get_download_link(self, video:Video):
         try:
-            return self.__convert(video)["dlink"].replace("\\/", "/")
+            data = self.__convert(video)
+            dlink = data["dlink"]
         except KeyError:
-            return ""
+            raise KeyError("error: error al obtener el link de descarga")
+        except RequestException:
+            raise RequestException(self.__connection_error)
+        return dlink.replace("\\/", "/")
 
-    def get_formatted_data(self, print_:bool=True):
+    def get_formatted_data(self, print_:bool=True) -> str:
         if not self.__check_data():
-            raise ValueError(self.__missing_data_error)
+            raise MissingVideoData(self.__missing_data_error)
         d = pformat(self.__data)
         if print_:
             print(d)
         return d
 
-    def print_available_qualities(self, add_choices:bool=False):
-        if not self.__check_data():
-            raise KeyError(self.__missing_data_error)
+    def print_available_qualities(self, add_choices:bool=False) -> tuple:
+        if self.__check_data() != 0:
+            raise MissingVideoData(self.__missing_data_error)
         qualities = self.__data["qualities"]
-        list_of_qualities = [key for key in qualities.keys()]
+        list_of_qualities = list(qualities.keys())
         list_of_qualities.sort(reverse=True)
         print("{} de video disponible para descargar:".format("Calidades" if len(list_of_qualities) > 1 else "Calidad"))
         for pos, key in enumerate(list_of_qualities):
@@ -202,23 +222,36 @@ if __name__ == "__main__":
         parser.print_help()
         exit(1)
 
-    downloader.set_target(link)
-
-    if not downloader.get_info():
-        print("error: hubo un error al intentar obtener información del vídeo")
+    try:
+        downloader.set_target(link)
+    except ValueError as e:
+        print(e.args[0])
         exit(1)
 
-    print("Link de vídeo detectado! -> {}".format(downloader.get_video_name()))
+    try:
+        downloader.get_info()
+    except Exception as e:
+        print(e.args[0])
+        exit(1)
+
+    try:
+        print("Link de vídeo detectado! -> {}".format(downloader.get_video_name()))
+    except KeyError as e:
+        print(e.args[0])
+        exit(1)
 
     if args.stdin:
-        ammount_qualities = downloader.print_available_qualities(True)
+        try:
+            ammount_qualities = downloader.print_available_qualities(True)
+        except Exception as e:
+            print(e.args[0])
+            exit(1)
         calidad = input("-> ").strip()
         try:
             number = int(calidad)
+            if not (number > 0 and number <= len(ammount_qualities)):
+                raise ValueError()
         except ValueError:
-            print("Opción inválida")
-            exit(1)
-        if not (number > 0 and number <= len(ammount_qualities)):
             print("Opción inválida")
             exit(1)
         calidad = ammount_qualities[number]
@@ -229,9 +262,13 @@ if __name__ == "__main__":
         else:
             calidad = args.calidad
 
+    code = 1
     try:
-        downloader.download(calidad if args.stdin else args.calidad)
+        downloader.download(calidad)
+        code = 0
     except KeyboardInterrupt:
         pass
+    except (KeyError, ValueError, RequestException) as e:
+        print(e.args[0])
     finally:
-        exit(0)
+        exit(code)
