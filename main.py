@@ -38,6 +38,7 @@ class YTDownloader:
     __missing_data_error = "error: los datos del vídeo no existen"
     __connection_error = "error: compruebe su conexión a internet o cortafuegos"
     __quality_value_error = "error: valor de calidad incorecto -> {}"
+    __quality_not_existent_error = "error: calidad no disponible -> {}p"
 
     def __init__(self):
         self.__target = ''
@@ -82,7 +83,7 @@ class YTDownloader:
             raise RequestException(self.__connection_error)
         return self.__save_info(info)
 
-    def __check_quality(self, quality):
+    def __check_quality(self, quality, allow_lt:bool=False) -> Video:
         if self.__check_data() != 0:
             raise MissingVideoData(self.__missing_data_error)
         if isinstance(quality, str):
@@ -93,13 +94,25 @@ class YTDownloader:
                 quality = int(quality.strip(printable.replace(digits, '')))
             except ValueError:
                 ValueError(self.__quality_value_error.format(quality))
-        try:
-            video = self.__data["qualities"][quality]
-        except KeyError:
-            raise KeyError("error: calidad no disponible -> {}".format(quality))
+        if isinstance(quality, int):
+            nope = 0
+            if allow_lt:
+                matching_qualities = tuple(filter(lambda key_qual: quality >= key_qual, self.__data["qualities"].keys()))
+                if matching_qualities:
+                    quality = max(matching_qualities)
+                else:
+                    nope = 1
+            try:
+                video = self.__data["qualities"][quality]
+            except KeyError:
+                nope = 1
+            if nope:
+                raise KeyError(self.__quality_not_existent_error.format(quality))
+        else:
+            raise ValueError(self.__quality_value_error.format(quality))
         return video
 
-    def download(self, calidad) -> int:
+    def download(self, calidad) -> int:        
         video = self.__check_quality(calidad)
         self.__download(video)
         self.reset_target()
