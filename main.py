@@ -86,27 +86,30 @@ class YTDownloader:
     def __check_quality(self, quality, allow_lt:bool=False) -> Video:
         if self.__check_data() != 0:
             raise MissingVideoData(self.__missing_data_error)
+        raise_err = 0
         if isinstance(quality, str):
             quality = quality.strip()
             if not (quality[-1] == 'p' or quality[-1].isnumeric()):
-                ValueError(self.__quality_value_error.format(quality))
-            try:
-                quality = int(quality.strip(printable.replace(digits, '')))
-            except ValueError:
-                ValueError(self.__quality_value_error.format(quality))
+                raise_err = 1
+            else:
+                try:
+                    quality = int(quality.strip(printable.replace(digits, '')))
+                except ValueError:
+                    raise_err = 1
+            if raise_err:
+                raise ValueError(self.__quality_value_error.format(quality))
         if isinstance(quality, int):
-            nope = 0
             if allow_lt:
                 matching_qualities = tuple(filter(lambda key_qual: quality >= key_qual, self.__data["qualities"].keys()))
                 if matching_qualities:
                     quality = max(matching_qualities)
                 else:
-                    nope = 1
+                    raise_err = 1
             try:
                 video = self.__data["qualities"][quality]
             except KeyError:
-                nope = 1
-            if nope:
+                raise_err = 1
+            if raise_err:
                 raise KeyError(self.__quality_not_existent_error.format(quality))
         else:
             raise ValueError(self.__quality_value_error.format(quality))
