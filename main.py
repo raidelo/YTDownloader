@@ -1,7 +1,6 @@
 from argparse import ArgumentParser
 from pprint import pformat
 from string import printable, digits
-from typing import Any
 from requests import get, post, RequestException
 
 class MissingTargetUrl(Exception):
@@ -159,7 +158,7 @@ class YTDownloader:
             if e.strerror == "Invalid argument":
                 raise OSError("error: no se pudo crear el archivo: título inválido: {}".format(video_title))
             raise e
-        print("Finished! -> {}.mp4".format(video_title))
+        print("\nFinished! -> {}.mp4".format(video_title))
         return 0
 
     def get_video_name(self) -> str:
@@ -266,7 +265,7 @@ if __name__ == "__main__":
 
     try:
         print("Link de vídeo detectado! -> {}".format(downloader.get_video_name()))
-    except KeyError as e:
+    except (KeyError, MissingVideoData) as e:
         print(e.args[0])
         exit(1)
 
@@ -292,13 +291,16 @@ if __name__ == "__main__":
         else:
             calidad = args.calidad
 
-    code = 1
+    code = 0
     try:
         downloader.download(calidad)
-        code = 0
     except KeyboardInterrupt:
         pass
     except (KeyError, ValueError, RequestException, MissingVideoData, PermissionError, OSError) as e:
-        print(e.args[0])
-    finally:
-        exit(code)
+        print(' '.join(e.args))
+        code = 1
+    except BaseException as e:
+        print("error: " + ' '.join(e.args))
+        code = 1
+
+    exit(code)
