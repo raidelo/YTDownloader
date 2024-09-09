@@ -146,18 +146,25 @@ class YTDownloader:
         iterator = response.iter_content(CHUNK_SIZE)
         downloaded = 0
         target_size = int(response.headers["Content-Length"].strip())
-        with open(video_title+".mp4", "wb") as file:
-            print("Downloading video: {}.mp4 ({})".format(video_title, video.quality))
-            for chunk in iterator:
-                file.write(chunk)
-                downloaded += len(chunk)
-                print('\r' + update_bar(downloaded, target_size, LENGTH_BAR), end='')
+        try:
+            with open(video_title+".mp4", "wb") as file:
+                print("Downloading video: {}.mp4 ({})".format(video_title, video.quality))
+                for chunk in iterator:
+                    file.write(chunk)
+                    downloaded += len(chunk)
+                    print('\r' + update_bar(downloaded, target_size, LENGTH_BAR), end='')
+        except PermissionError:
+            raise PermissionError("error: no se pudo crear el archivo debido a falta de permisos")
+        except OSError as e:
+            if e.strerror == "Invalid argument":
+                raise OSError("error: no se pudo crear el archivo: título inválido: {}".format(video_title))
+            raise e
         print("Finished! -> {}.mp4".format(video_title))
         return 0
 
     def get_video_name(self) -> str:
         try:
-            return self.__data["title"]
+            return self.__data["title"].replace("<>:\"/\\|?*", '_')
         except KeyError:
             raise MissingVideoData(self.__missing_data_error)
     
@@ -291,7 +298,7 @@ if __name__ == "__main__":
         code = 0
     except KeyboardInterrupt:
         pass
-    except (KeyError, ValueError, RequestException, MissingVideoData) as e:
+    except (KeyError, ValueError, RequestException, MissingVideoData, PermissionError, OSError) as e:
         print(e.args[0])
     finally:
         exit(code)
