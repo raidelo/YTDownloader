@@ -114,8 +114,8 @@ class YTDownloader:
             raise ValueError(self.__quality_value_error.format(quality))
         return video
 
-    def download(self, calidad) -> int:        
-        video = self.__check_quality(calidad)
+    def download(self, calidad, allow_lt:bool=False) -> int:        
+        video = self.__check_quality(calidad, allow_lt)
         self.__download(video)
         self.reset_target()
         return 0
@@ -237,6 +237,9 @@ if __name__ == "__main__":
                         help="la calidad en la que prefieres descargar el vídeo")
     parser.add_argument("--stdin", action="store_true",
                         help="flag para ingresar tanto la url como la calidad por la entrada de datos estándar (stdin)")
+    parser.add_argument("--exact", action="store_true",
+                        help="flag para descargar exactamente la calidad ingresada "
+                        "(por defecto: aceptar calidad menor o igual a la introducida)")
     args = parser.parse_args()
 
     downloader = YTDownloader()
@@ -293,7 +296,7 @@ if __name__ == "__main__":
 
     code = 0
     try:
-        downloader.download(calidad)
+        downloader.download(calidad, not args.exact)
     except KeyboardInterrupt:
         pass
     except (KeyError, ValueError, RequestException, MissingVideoData, PermissionError, OSError) as e:
