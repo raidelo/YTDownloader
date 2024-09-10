@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 from pprint import pformat
-from string import printable, digits
+from string import printable, digits, ascii_letters
 from requests import get, post, RequestException
 
 class MissingTargetUrl(Exception):
@@ -28,7 +28,9 @@ class Video:
 class YTDownloader:
     __host = "https://www.y2mate.com"
     __analyze_endpoint = "/mates/analyzeV2/ajax"
+    __analyze_query_parameter = "k_query={}"
     __convert_endpoint =  "/mates/convertV2/index"
+    __convert_query_parameter = "vid={}&k={}"
     __default_headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
                          "Referer": "https://www.y2mate.com/",
                          }
@@ -124,7 +126,6 @@ class YTDownloader:
         link = self.__get_download_link(video)
         try:
             response = get(link,
-                           headers=self.__default_headers,
                            stream=True)
         except RequestException:
             raise RequestException("error: error al descargar el video. compruebe su conexión a internet o su cortafuegos")
@@ -163,7 +164,7 @@ class YTDownloader:
 
     def get_video_name(self) -> str:
         try:
-            return self.__data["title"].replace("<>:\"/\\|?*", '_')
+            return ''.join(list(map(lambda x: x if x not in "<>:\"/\\|?*" else '_', self.__data["title"])))
         except KeyError:
             raise MissingVideoData(self.__missing_data_error)
     
@@ -188,16 +189,15 @@ class YTDownloader:
     def __analyze(self, url:str) -> dict:
         r = post(self.__host + self.__analyze_endpoint,
                  headers=self.__default_headers,
-                 data="k_query={}".format(url))
+                 data=self.__analyze_query_parameter.format(url_encode(url)))
         return r.json()
 
     def __convert(self, video:Video) -> dict:
         '''Le pregunta a la API por el link de descarga del video ingresado como parámetro'''
         r = post(self.__host + self.__convert_endpoint,
                  headers=self.__default_headers,
-                 data="vid={}&k={}".format(video.id,
-                                           video.key,
-                                           ))
+                 data=self.__convert_query_parameter.format(video.id, url_encode(video.key))
+                 )
         return r.json()
 
     def __get_download_link(self, video:Video):
@@ -228,6 +228,9 @@ class YTDownloader:
         for pos, key in enumerate(list_of_qualities):
             print("{}{} -> {}".format("[{}] - ".format(pos+1) if add_choices else '', str(key)+'p', qualities[key].size))
         return tuple(list_of_qualities)
+
+def url_encode(string:str):
+    return ''.join(list(map(lambda x: x if x in ascii_letters+digits else '%'+x.encode('utf-8').hex().upper(), string)))
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -303,6 +306,8 @@ if __name__ == "__main__":
         print(' '.join(e.args))
         code = 1
     except BaseException as e:
+        if isinstance(e, SystemExit):
+            exit(e.code)
         print("error: " + ' '.join(e.args))
         code = 1
 
