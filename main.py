@@ -146,13 +146,16 @@ class YTDownloader:
         iterator = response.iter_content(CHUNK_SIZE)
         downloaded = 0
         target_size = int(response.headers["Content-Length"].strip())
+        last_bar_lenght = 0
         try:
             with open(video_title+".mp4", "wb") as file:
                 print("Downloading video: {}.mp4 ({})".format(video_title, video.quality))
                 for chunk in iterator:
                     file.write(chunk)
                     downloaded += len(chunk)
-                    print('\r' + update_bar(downloaded, target_size, LENGTH_BAR), end='')
+                    bar = update_bar(downloaded, target_size, LENGTH_BAR)
+                    print('\r' + ' '*last_bar_lenght + '\r' + bar, end='')
+                    last_bar_lenght = len(bar)
         except PermissionError:
             raise PermissionError("error: no se pudo crear el archivo debido a falta de permisos")
         except OSError as e:
