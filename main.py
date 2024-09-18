@@ -251,6 +251,47 @@ class YTDownloader:
             print("{}{} -> {}".format("[{}] - ".format(pos+1) if add_choices else '', str(key)+'p', qualities[key].size))
         return tuple(list_of_qualities)
 
+    def read_file(self, file:str) -> list:
+        try:
+            with open(file, "rb") as f:
+                content = f.readlines()
+                return list(map(lambda line: line.decode("utf-8").strip(), content))
+        except PermissionError:
+            raise PermissionError("error: no se pudo crear el archivo debido a falta de permisos")
+        except FileNotFoundError:
+            raise FileNotFoundError("error: archivo {} no encontrado".format(file))
+        except BaseException as e:
+            raise e
+
+    def download_from_file(self, arguments, exact_quality=False, output=None) -> int:
+        file, default_quality = arguments
+
+        try:
+            content = self.read_file(file)
+        except BaseException as e:
+            print(e)
+
+        for line in content:
+            link, _, quality = line.partition(",")
+            if link:
+                print("-"*50)
+                try:
+                    ok = True
+                    downloader.set_target(link)
+                    downloader.get_info()
+                    print("Link de vídeo detectado! -> {}".format(downloader.get_video_name()))
+                except (KeyError, ValueError, MissingVideoData) as e:
+                    print(e.args[0])
+                    ok = False
+                except RequestException as e:
+                    print(e.args[0])
+                    return 1
+                if ok:
+                    downloader.download_handled(quality or default_quality, not exact_quality, output)
+                    downloader.reset_target()
+        print("-"*50)
+        return 0
+
     def download_handled(self, *args, **kwargs) -> int:
         try:
             downloader.download(*args, *kwargs)
@@ -284,6 +325,9 @@ if __name__ == "__main__":
     parser.add_argument("--exact", action="store_true",
                         help="flag para descargar exactamente la calidad ingresada "
                         "(por defecto: aceptar calidad menor o igual a la introducida)")
+    parser.add_argument("-f", "--file", nargs=2,
+                        help="para especificar el archivo que contiene los links de los vídeos a descargar y la calidad por defecto para descargar")
+
     args = parser.parse_args()
 
     downloader = YTDownloader()
@@ -293,7 +337,12 @@ if __name__ == "__main__":
             parser.error("argument --stdin: not allowed with argument link or calidad")
         link = input("Ingrese el link: ").strip()
     elif args.link:
+        if args.file:
+            parser.error("argument --file: not allowed with argument link or calidad")
         link = args.link
+    elif args.file:
+        r = downloader.download_from_file(args.file, exact_quality=args.exact)
+        exit(r)
     else:
         parser.print_help()
         exit(1)
