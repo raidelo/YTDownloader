@@ -317,7 +317,7 @@ if __name__ == "__main__":
                         help="el link del vídeo que quieres descargar")
     parser.add_argument("calidad", nargs="?", default='',
                         help="la calidad en la que prefieres descargar el vídeo")
-    parser.add_argument("-o", "--output",
+    parser.add_argument("-o", "--output", metavar="ruta_archivo",
                         help="nombre del archivo/carpeta en el/la que se va a guardar el vídeo "
                         "(por defecto: carpeta actual)")
     parser.add_argument("--stdin", action="store_true",
@@ -325,7 +325,7 @@ if __name__ == "__main__":
     parser.add_argument("--exact", action="store_true",
                         help="flag para descargar exactamente la calidad ingresada "
                         "(por defecto: aceptar calidad menor o igual a la introducida)")
-    parser.add_argument("-f", "--file", nargs=2,
+    parser.add_argument("-f", "--file", nargs=2, metavar=("archivo", "calidad_por_defecto"),
                         help="para especificar el archivo que contiene los links de los vídeos a descargar y la calidad por defecto para descargar")
 
     args = parser.parse_args()
