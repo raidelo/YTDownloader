@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 from pprint import pformat
 from string import printable, digits, ascii_letters
-from requests import get, post, RequestException
+from requests import get, post, RequestException, HTTPError
 from os import makedirs, path
 
 class MissingTargetUrl(Exception):
@@ -129,6 +129,9 @@ class YTDownloader:
         try:
             response = get(link,
                            stream=True)
+            response.raise_for_status()
+        except HTTPError as e:
+            raise e
         except RequestException:
             raise RequestException("error: error al descargar el video. compruebe su conexión a internet o su cortafuegos")
         def update_bar(done, target, length_bar):
@@ -324,6 +327,9 @@ if __name__ == "__main__":
         downloader.download(calidad, not args.exact, args.output)
     except KeyboardInterrupt:
         pass
+    except HTTPError as e:
+        print("error: {} {}".format(e.response.status_code, e.response.reason))
+        code = 1
     except (KeyError, ValueError, RequestException, MissingVideoData, PermissionError, OSError) as e:
         print(' '.join(e.args))
         code = 1
