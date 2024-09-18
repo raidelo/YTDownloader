@@ -251,6 +251,22 @@ class YTDownloader:
             print("{}{} -> {}".format("[{}] - ".format(pos+1) if add_choices else '', str(key)+'p', qualities[key].size))
         return tuple(list_of_qualities)
 
+    def download_handled(self, *args, **kwargs) -> int:
+        try:
+            downloader.download(*args, *kwargs)
+            return 0
+        except KeyboardInterrupt:
+            pass
+        except HTTPError as e:
+            print("error: {} {}".format(e.response.status_code, e.response.reason))
+        except (KeyError, ValueError, RequestException, MissingVideoData, PermissionError, OSError) as e:
+            print(' '.join(e.args))
+        except BaseException as e:
+            if isinstance(e, SystemExit):
+                exit(e.code)
+            print("error: " + ' '.join(e.args))
+        return 1
+
 def url_encode(string:str):
     return ''.join(list(map(lambda x: x if x in ascii_letters+digits else '%'+x.encode('utf-8').hex().upper(), string)))
 
@@ -322,21 +338,6 @@ if __name__ == "__main__":
         else:
             calidad = args.calidad
 
-    code = 0
-    try:
-        downloader.download(calidad, not args.exact, args.output)
-    except KeyboardInterrupt:
-        pass
-    except HTTPError as e:
-        print("error: {} {}".format(e.response.status_code, e.response.reason))
-        code = 1
-    except (KeyError, ValueError, RequestException, MissingVideoData, PermissionError, OSError) as e:
-        print(' '.join(e.args))
-        code = 1
-    except BaseException as e:
-        if isinstance(e, SystemExit):
-            exit(e.code)
-        print("error: " + ' '.join(e.args))
-        code = 1
+    code = downloader.download(calidad, not args.exact, args.output)
 
     exit(code)
