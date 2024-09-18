@@ -2,6 +2,7 @@ from argparse import ArgumentParser
 from pprint import pformat
 from string import printable, digits, ascii_letters
 from requests import get, post, RequestException
+from os import makedirs, path
 
 class MissingTargetUrl(Exception):
     pass
@@ -116,14 +117,15 @@ class YTDownloader:
             raise ValueError(self.__quality_value_error.format(quality))
         return video
 
-    def download(self, calidad, allow_lt:bool=False) -> int:        
+    def download(self, calidad, allow_lt:bool=False, output:str=None) -> int:
         video = self.__check_quality(calidad, allow_lt)
-        self.__download(video)
+        self.__download(video, output)
         self.reset_target()
         return 0
 
-    def __download(self, video:Video) -> int:
+    def __download(self, video:Video, output:str=None) -> int:
         link = self.__get_download_link(video)
+        print("Comenzando descarga ...")
         try:
             response = get(link,
                            stream=True)
@@ -140,7 +142,19 @@ class YTDownloader:
                                                       )
             return buffer
 
-        video_title = self.get_video_name()
+        video_path = ''
+        if output:
+            output = output.replace("\\", '/')
+            if output.endswith('/'):
+                video_path += output + self.get_video_name() + ".mp4"
+            else:
+                video_path += output
+                if not video_path.endswith(".mp4"):
+                    video_path += ".mp4"
+        else:
+            video_path += self.get_video_name() + ".mp4"
+
+        video_title = video_path.split('/')[-1]
         LENGTH_BAR = 50
         CHUNK_SIZE = 1024
         iterator = response.iter_content(CHUNK_SIZE)
@@ -148,8 +162,10 @@ class YTDownloader:
         target_size = int(response.headers["Content-Length"].strip())
         last_bar_lenght = 0
         try:
-            with open(video_title+".mp4", "wb") as file:
-                print("Downloading video: {}.mp4 ({})".format(video_title, video.quality))
+            makedirs(video_path.replace(video_title, ''), exist_ok=True)
+            with open(video_path, "wb") as file:
+                print("Ruta de destino -> {}".format(path.abspath(video_path)))
+                print("Downloading video: {} ({})".format(video_title, video.quality))
                 for chunk in iterator:
                     file.write(chunk)
                     downloaded += len(chunk)
@@ -162,7 +178,7 @@ class YTDownloader:
             if e.strerror == "Invalid argument":
                 raise OSError("error: no se pudo crear el archivo: título inválido: {}".format(video_title))
             raise e
-        print("\nFinished! -> {}.mp4".format(video_title))
+        print("\nFinished! -> {}".format(video_title))
         return 0
 
     def get_video_name(self) -> str:
@@ -241,6 +257,9 @@ if __name__ == "__main__":
                         help="el link del vídeo que quieres descargar")
     parser.add_argument("calidad", nargs="?", default='',
                         help="la calidad en la que prefieres descargar el vídeo")
+    parser.add_argument("-o", "--output",
+                        help="nombre del archivo/carpeta en el/la que se va a guardar el vídeo "
+                        "(por defecto: carpeta actual)")
     parser.add_argument("--stdin", action="store_true",
                         help="flag para ingresar tanto la url como la calidad por la entrada de datos estándar (stdin)")
     parser.add_argument("--exact", action="store_true",
@@ -302,7 +321,7 @@ if __name__ == "__main__":
 
     code = 0
     try:
-        downloader.download(calidad, not args.exact)
+        downloader.download(calidad, not args.exact, args.output)
     except KeyboardInterrupt:
         pass
     except (KeyError, ValueError, RequestException, MissingVideoData, PermissionError, OSError) as e:
